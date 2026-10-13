@@ -1,0 +1,28 @@
+{
+  "title": "Trilogy Hub Server",
+  "subtitle": "",
+  "port": 7777,
+  "max_slots": 32,
+  "server_key": "",
+  "password": "",
+  "client_loadstring": true,
+  "anticheat_enabled": true,
+  "auto_update": true,
+  "disabled_resources": [],
+  "voice": {
+    "enabled": true,
+    "mode": "proximity",
+    "range": 40,
+    "min_distance": 2,
+    "falloff": "inverse",
+    "wall_damping": 0.75,
+    "push_to_talk": "optional",
+    "push_to_talk_key": "z",
+    "bitrate": 32,
+    "occlusion": true,
+    "reverb": true,
+    "vehicle_muffle": true,
+    "indicator": true,
+    "muted_by_default": false
+  }
+}

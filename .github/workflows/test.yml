@@ -1,0 +1,105 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Start on Linux with Node.js 18
+        run: |
+          mkdir srv && cp start.js srv/ && cd srv
+          TH_PORT=7790 TH_MAX_SLOTS=12 node start.js < /dev/null > out.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 120); do grep -q "players can join" out.log && break; sleep 1; done
+          cat out.log
+          grep -q "Server is listening on port 7790 - players can join" out.log
+          grep -q '"max_slots": 12' server-config.json
+          ss -lnt | grep -q ':7790 '
+          ss -lnu | grep -q ':7790 '
+          kill -TERM $pid
+          wait $pid; echo "exit $?" >> out.log
+          tail -5 out.log
+          grep -q "^exit 0" out.log
+
+  pterodactyl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install script in the egg installer container
+        run: |
+          jq -r '.scripts.installation.script' pterodactyl/egg-trilogy-hub.json > install.sh
+          IMAGE=$(jq -r '.scripts.installation.container' pterodactyl/egg-trilogy-hub.json)
+          mkdir server
+          docker run --rm -v "$PWD/server:/mnt/server" -v "$PWD/install.sh:/install.sh:ro" "$IMAGE" bash /install.sh
+          ls -la server
+          test -f server/start.js && test -x server/start.sh && test -f server/server-config.json
+          sudo chown -R 988:988 server
+      - name: Start like Wings (TTY, stdin open, egg startup, done string, stop command)
+        run: |
+          IMAGE=$(jq -r '.docker_images | to_entries[0].value' pterodactyl/egg-trilogy-hub.json)
+          STARTUP=$(jq -r '.startup' pterodactyl/egg-trilogy-hub.json)
+          DONE=$(jq -r '.config.startup | fromjson | .done' pterodactyl/egg-trilogy-hub.json)
+          STOP=$(jq -r '.config.stop' pterodactyl/egg-trilogy-hub.json)
+          docker run -d -t -i --name th --user 988:988 -w /home/container \
+            -v "$PWD/server:/home/container" -p 7791:7791/tcp -p 7791:7791/udp \
+            -e STARTUP="$STARTUP" -e SERVER_PORT=7791 -e SERVER_IP=0.0.0.0 -e SERVER_MEMORY=256 \
+            -e TH_MAX_SLOTS=20 -e TH_SERVER_KEY= "$IMAGE"
+          for i in $(seq 1 120); do docker logs th 2>&1 | grep -q "$DONE" && break; sleep 1; done
+          docker logs th
+          docker logs th 2>&1 | grep -q "Server is listening on port 7791 - players can join"
+          grep -q '"port": 7791' server/server-config.json
+          grep -q '"max_slots": 20' server/server-config.json
+          python3 - "$STOP" <<'PY'
+          import os, pty, sys, time
+          pid, fd = pty.fork()
+          if pid == 0:
+              os.execvp("docker", ["docker", "attach", "th"])
+          time.sleep(2)
+          os.write(fd, (sys.argv[1] + "\r").encode())
+          time.sleep(1)
+          PY
+          code=$(timeout 60 docker wait th)
+          docker logs th 2>&1 | tail -5
+          test "$code" = "0"
+      - name: Second start reuses the downloaded server
+        run: |
+          IMAGE=$(jq -r '.docker_images | to_entries[0].value' pterodactyl/egg-trilogy-hub.json)
+          docker rm th
+          docker run -d -t -i --name th2 --user 988:988 -w /home/container -v "$PWD/server:/home/container" \
+            -e STARTUP="$(jq -r '.startup' pterodactyl/egg-trilogy-hub.json)" -e SERVER_PORT=7792 "$IMAGE"
+          for i in $(seq 1 60); do docker logs th2 2>&1 | grep -q "players can join" && break; sleep 1; done
+          docker logs th2
+          docker logs th2 2>&1 | grep -q "port 7792 - players can join"
+          ! docker logs th2 2>&1 | grep -q "pobieram najnowszy serwer"
+          docker stop -t 30 th2
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Start on Windows
+        run: |
+          mkdir srv && cp start.js srv/ && cd srv
+          (TH_PORT=7793 timeout 90 node start.js > out.log 2>&1 || true) &
+          for i in $(seq 1 85); do grep -q "players can join" out.log && break; sleep 1; done
+          cat out.log
+          grep -q "Server is listening on port 7793 - players can join" out.log

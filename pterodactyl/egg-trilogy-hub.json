@@ -1,0 +1,52 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-10-13T23:30:00+00:00",
+    "name": "Trilogy Hub",
+    "author": "kontakt@trilogy-hub.com",
+    "description": "Trilogy Hub server - multiplayer for GTA: San Andreas - The Definitive Edition. The server program is downloaded from the official signed releases on the first start and updates itself.",
+    "features": null,
+    "docker_images": {
+        "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
+    },
+    "file_denylist": [],
+    "startup": "TH_PORT={{SERVER_PORT}} node start.js",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\":\"players can join\"}",
+        "logs": "{}",
+        "stop": "shutdown"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Trilogy Hub - installation (runs in the installer container, server files are in /mnt/server)\nset -e\nREPO=\"https://raw.githubusercontent.com/Abs0lw3nt/TrilogyHub-Hosting/main\"\nmkdir -p /mnt/server\ncd /mnt/server\ncurl -fsSL \"$REPO/start.js\" -o start.js\ncurl -fsSL \"$REPO/start.sh\" -o start.sh\nchmod +x start.sh\nif [ ! -f server-config.json ]; then\n  curl -fsSL \"$REPO/server-config.example.json\" -o server-config.json\nfi\n# reinstall = fresh server program from the latest release on the next start; config and resources stay\nrm -f TrilogyHubServer\necho \"Trilogy Hub: installation finished. The server program is downloaded and verified on the first start.\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Player slots",
+            "description": "Maximum number of players on the server.",
+            "env_variable": "TH_MAX_SLOTS",
+            "default_value": "32",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|between:1,1000",
+            "field_type": "text"
+        },
+        {
+            "name": "Server key",
+            "description": "server_key from the Trilogy Hub launcher (Servers > Create server). Without it the server works, but is not shown on the server list. Leave empty to keep the key from server-config.json.",
+            "env_variable": "TH_SERVER_KEY",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:128",
+            "field_type": "text"
+        }
+    ]
+}
